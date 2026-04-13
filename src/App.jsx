@@ -229,13 +229,15 @@ function CreditBar({credits,onBuy}){
 }
 
 function UpsellBanner({credits,onBuy}){
-  if(credits>20)return null;
+  // Solo mostrar si tiene créditos pero pocos (entre 1 y 20)
+  // Si tiene 0 nunca pagó → el paywall se encarga
+  if(credits===0||credits>20)return null;
   return(
     <div className="upsell-banner">
-      <div style={{fontSize:32,flexShrink:0}}>{credits===0?"⚠️":"⚡"}</div>
+      <div style={{fontSize:32,flexShrink:0}}>⚡</div>
       <div style={{flex:1}}>
-        <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:15,fontWeight:700,marginBottom:4}}>{credits===0?"Sin créditos":`Solo ${credits} créditos`}</div>
-        <div style={{fontSize:12,color:T.t2}}>Recargá para seguir generando</div>
+        <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:15,fontWeight:700,marginBottom:4}}>Solo te quedan {credits} créditos</div>
+        <div style={{fontSize:12,color:T.t2}}>Recargá para no interrumpir tu flujo</div>
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         <button onClick={()=>onBuy(50,5)} style={{padding:"8px 14px",background:T.s1,border:`1px solid ${T.border}`,borderRadius:8,color:T.t2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"Epilogue, sans-serif"}}>+50 — $5</button>
@@ -459,6 +461,17 @@ Beneficios:
       </div>
       <UpsellBanner credits={credits} onBuy={(c,p)=>createMPPayment({title:`AVANTI — ${c} créditos`,price:p,credits:c})}/>
       {err&&<div className="err-box">⚠ {err}</div>}
+      {credits===0&&(
+        <div style={{padding:20,background:`linear-gradient(135deg,${T.s2},${T.bg})`,border:`1px solid ${T.acc}55`,borderRadius:14,marginBottom:20,textAlign:"center"}}>
+          <div style={{fontSize:32,marginBottom:12}}>🔒</div>
+          <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:18,fontWeight:700,marginBottom:8}}>Necesitás AVANTI PRO para generar</div>
+          <div style={{fontSize:13,color:T.t2,marginBottom:16}}>Comprá acceso por $37 USD y recibís 100 créditos para usar todos los módulos.</div>
+          <button onClick={onBuy} style={{padding:"14px 32px",background:T.acc,color:"white",border:"none",borderRadius:10,fontFamily:"'Clash Display',sans-serif",fontSize:15,fontWeight:700,cursor:"pointer"}}>
+            🔓 Obtener AVANTI PRO — $37 USD →
+          </button>
+          <div style={{fontSize:11,color:T.t3,marginTop:10}}>🛡️ Garantía 7 días · ⚡ Acceso inmediato</div>
+        </div>
+      )}
       <div className="row2">
         <div className="field"><label className="lbl">Producto / Servicio *</label><input className="inp" placeholder="ej: Curso de inversión" value={form.producto} onChange={up("producto")}/></div>
         <div className="field"><label className="lbl">Diferenciador clave</label><input className="inp" placeholder="ej: resultados en 30 días" value={form.diferenciador||""} onChange={up("diferenciador")}/></div>
@@ -469,7 +482,7 @@ Beneficios:
       <div className="field"><label className="lbl">Tono *</label><div className="chips">{TON.map(t=><button key={t} className={`chip${form.tono===t?" on":""}`} onClick={()=>tog("tono",t)}>{t}</button>)}</div></div>
       <div className="field"><label className="lbl">Audiencia</label><div className="chips">{AUD.map(a=><button key={a} className={`chip${form.audiencia===a?" on":""}`} onClick={()=>tog("audiencia",a)}>{a}</button>)}</div></div>
       <button className="btn-run" onClick={run} disabled={!valid||credits<COSTS.campaign}>
-        {credits<COSTS.campaign?`Sin créditos (necesitás ${COSTS.campaign})`:valid?"⚡ Generar campaña completa":"Completá los campos *"}
+        {credits===0?"🔒 Comprá acceso para generar":credits<COSTS.campaign?`Sin créditos (necesitás ${COSTS.campaign})`:valid?"⚡ Generar campaña completa":"Completá los campos *"}
       </button>
     </div>
   );
