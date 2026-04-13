@@ -18,6 +18,7 @@ const COSTS = { campaign:2, image:1, video:3, landing:2 };
 const PLAN_CREDITS = 100;
 const MP_ACCESS_TOKEN = "TU_ACCESS_TOKEN_AQUI";
 const MP_LINK_PAGO = "https://mpago.la/2k82Fb7";
+const DALLE_API_KEY = "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";
 
 const G = `
 @import url('https://fonts.googleapis.com/css2?family=Clash+Display:wght@500;600;700&family=Epilogue:ital,wght@0,300;0,400;0,500;1,300&display=swap');
@@ -548,23 +549,42 @@ function ImageModule({form,credits,useCredits,onBuy}){
   const [format,setFormat]=useState("Post cuadrado 1:1");
   const [phase,setPhase]=useState("form");
   const [prompts,setPrompts]=useState([]);
+  const [images,setImages]=useState([]);
   const [stream,setStream]=useState("");
   const [err,setErr]=useState("");
   const STYLES=["Fotografía publicitaria","Lifestyle / Real","Minimalista","Bold / Gráfico","Dark / Premium"];
   const FORMATS=["Post cuadrado 1:1","Story vertical 9:16","Banner 16:9","Carrusel 1:1"];
   const TOTAL=COSTS.image*4;
 
+  const generateDALLE=async(prompt,size)=>{
+    const res=await fetch("https://api.openai.com/v1/images/generations",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${DALLE_API_KEY}`},
+      body:JSON.stringify({model:"dall-e-3",prompt,n:1,size,quality:"standard",response_format:"url"})
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error.message);
+    return data.data[0].url;
+  };
+
+  const dlImage=async(url,name)=>{
+    try{const res=await fetch(url);const blob=await res.blob();const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`${name}.png`;a.click();URL.revokeObjectURL(u);}
+    catch{window.open(url,"_blank");}
+  };
+
   const run=async()=>{
     if(!form.producto){setErr("Completá primero los datos en Campaña.");return;}
-    if(credits<TOTAL){setErr(`Necesitás ${TOTAL} créditos para 4 imágenes. Tenés ${credits}.`);return;}
-    setErr("");setPhase("gen");useCredits(TOTAL);
-    const prompt=`Director de arte experto en publicidad digital.
+    if(credits<TOTAL){setErr(`Necesitás ${TOTAL} créditos. Tenés ${credits}.`);return;}
+    setErr("");setImages([]);setPrompts([]);setStream("");setPhase("gen");useCredits(TOTAL);
+    const sizeMap={"Post cuadrado 1:1":"1024x1024","Story vertical 9:16":"1024x1792","Banner 16:9":"1792x1024","Carrusel 1:1":"1024x1024"};
+    const dalleSize=sizeMap[format]||"1024x1024";
+    const promptIA=`Director de arte experto en publicidad digital.
 Producto: "${form.producto}". ${form.descripcion||""}
 Objetivo: ${form.objetivo||"ventas"}. Canal: ${form.canal||"Meta Ads"}. Tono: ${form.tono||"Emocional"}.
 Estilo: ${style}. Formato: ${format}.
 
-4 prompts en inglés para Midjourney/DALL·E. Formato EXACTO:
-PROMPT1: [prompt ultra-detallado en inglés, sin texto ni logos]
+4 prompts en inglés para DALL-E 3. Formato EXACTO:
+PROMPT1: [prompt ultra-detallado, sin texto ni logos en la imagen]
 CONCEPT1: [concepto en español, 5 palabras]
 PROMPT2: [prompt 2]
 CONCEPT2: [concepto 2]
@@ -573,60 +593,112 @@ CONCEPT3: [concepto 3]
 PROMPT4: [prompt 4]
 CONCEPT4: [concepto 4]
 
-Cada prompt: composición, iluminación, colores, mood, estilo fotográfico. Sin texto en imagen.`;
+Sin texto ni palabras visibles en las imágenes generadas.`;
+    let parsed=[];
     try{
-      let full="";await callAI(prompt,t=>{full=t;setStream(t);});
-      const parsed=[];
+      let full="";
+      await callAI(promptIA,t=>{full=t;setStream(t);});
       for(let i=1;i<=4;i++){
-        const pm=full.match(new RegExp(`PROMPT${i}:\\s*([^\\n]+)`,"i"));
-        const cm=full.match(new RegExp(`CONCEPT${i}:\\s*([^\\n]+)`,"i"));
-        if(pm)parsed.push({prompt:pm[1].trim(),concept:cm?cm[1].trim():`Variación ${i}`,num:i});
+        const pm=full.match(new RegExp(`PROMPT${i}:\s*([^\n]+)`,"i"));
+        const cm=full.match(new RegExp(`CONCEPT${i}:\s*([^\n]+)`,"i"));
+        if(pm)parsed.push({prompt:pm[1].trim(),concept:cm?cm[1].trim():`Variación ${i}`,num:i,url:null,loading:true,error:false});
       }
-      setPrompts(parsed.length?parsed:[{prompt:`Professional advertising photo for ${form.producto}, studio lighting, clean background`,concept:"Producto hero",num:1}]);
-      setPhase("result");
-    }catch{setErr("Error al generar.");setPhase("form");}
+      if(!parsed.length)throw new Error("Sin prompts");
+    }catch{setErr("Error generando prompts.");setPhase("form");return;}
+
+    setPhase("generating_images");
+    setImages([...parsed]);
+
+    for(let i=0;i<parsed.length;i++){
+      try{
+        const url=await generateDALLE(parsed[i].prompt,dalleSize);
+        parsed[i]={...parsed[i],url,loading:false};
+        setImages([...parsed]);
+      }catch(e){
+        parsed[i]={...parsed[i],loading:false,error:true};
+        setImages([...parsed]);
+      }
+    }
+    setPrompts([...parsed]);
+    setPhase("result");
   };
 
   const dlPrompts=()=>{const txt=prompts.map(p=>`=== ${p.concept} ===\n${p.prompt}`).join("\n\n");const b=new Blob([txt],{type:"text/plain"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=`prompts-${form.producto?.replace(/\s+/g,"-")||"avanti"}.txt`;a.click();URL.revokeObjectURL(u);};
 
-  if(phase==="gen")return<div className="gen-wrap"><div className="spin"/><div className="gen-title">Generando prompts…</div><div className="gen-step">Diseñando conceptos para {form.producto}…</div><div className="stream-box">{stream||"Iniciando…"}<span className="cursor"/></div></div>;
+  if(phase==="gen")return<div className="gen-wrap"><div className="spin"/><div className="gen-title">Diseñando conceptos…</div><div className="gen-step">Creando prompts para {form.producto}…</div><div className="stream-box">{stream||"Iniciando…"}<span className="cursor"/></div></div>;
+
+  if(phase==="generating_images")return(
+    <div className="gen-wrap">
+      <div className="gen-title">Generando con DALL·E 3 🎨</div>
+      <div className="gen-step" style={{marginBottom:24}}>~15 segundos por imagen…</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,width:"100%",maxWidth:400}}>
+        {[0,1,2,3].map(i=>{
+          const img=images[i];
+          return(
+            <div key={i} style={{aspectRatio:"1",background:T.s1,borderRadius:12,border:`1px solid ${img?.url?T.grn:img?.error?"#FF4444":T.border}`,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+              {img?.url?<img src={img.url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
+              :img?.loading?<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}><div className="spin" style={{width:28,height:28}}/><span style={{fontSize:10,color:T.t2}}>Generando…</span></div>
+              :img?.error?<span style={{fontSize:11,color:"#FF4444"}}>❌ Error</span>
+              :<span style={{fontSize:24,color:T.t3}}>⏳</span>}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{marginTop:16,fontSize:12,color:T.t2}}>{images.filter(i=>i?.url).length} de 4 listas</div>
+    </div>
+  );
 
   if(phase==="result"&&prompts.length)return(
     <div className="inner" style={{maxWidth:860}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,marginBottom:24}}>
-        <div><div className="pg-title">Prompts listos ✓</div><div className="pg-sub">4 variaciones · {style} · {format}</div></div>
-        <div style={{display:"flex",gap:8}}><button className="btn-sm" onClick={dlPrompts}>⬇ Descargar</button><button className="btn-sm" onClick={()=>setPhase("form")}>← Nueva</button></div>
+        <div><div className="pg-title">Imágenes generadas ✓</div><div className="pg-sub">DALL·E 3 · {style} · {format}</div></div>
+        <div style={{display:"flex",gap:8}}>
+          <button className="btn-sm" onClick={dlPrompts}>📋 Prompts</button>
+          <button className="btn-sm" onClick={()=>{setPhase("form");setImages([]);setPrompts([]);}}>← Nueva</button>
+        </div>
       </div>
-      <div style={{padding:14,background:T.bluD,border:`1px solid ${T.blu}33`,borderRadius:12,marginBottom:20,fontSize:13,color:T.t2,lineHeight:1.7}}>
-        <strong style={{color:T.blu}}>🎨 Cómo usar:</strong> <strong style={{color:T.t1}}>Midjourney</strong> → /imagine → pegá el prompt &nbsp;|&nbsp; <strong style={{color:T.t1}}>ChatGPT Plus</strong> → "Generar imagen" → pegá el prompt &nbsp;|&nbsp; <strong style={{color:T.t1}}>Firefly</strong> → firefly.adobe.com → Generate
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
         {prompts.map((p,i)=>{
           const colors=["#FF4D00","#FFB800","#00E87A","#4F8EF7"];
-          const labels=["Emocional / Aspiracional","Urgencia / FOMO","Prueba Social","Producto Hero"];
+          const labels=["Emocional","Urgencia","Social","Hero"];
           return(
-            <div className="prompt-card" key={i}>
-              <div style={{position:"absolute",top:0,left:0,width:3,bottom:0,background:colors[i]||T.acc,borderRadius:"3px 0 0 3px"}}/>
-              <div style={{paddingLeft:12}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:8}}>
-                  <div><div style={{fontSize:10,textTransform:"uppercase",letterSpacing:".08em",color:colors[i]||T.acc,fontWeight:700,marginBottom:3}}>{labels[i]||`Variación ${i+1}`}</div><div style={{fontSize:14,fontWeight:600,color:T.t1}}>{p.concept}</div></div>
-                  <div style={{display:"flex",gap:6}}><CopyBtn text={p.prompt} label="📋 Copiar"/><button className="btn-sm" onClick={()=>window.open("https://www.midjourney.com","_blank")}>↗ MJ</button></div>
+            <div key={i} style={{background:T.s1,border:`1px solid ${p.url?colors[i]+"44":T.border}`,borderRadius:14,overflow:"hidden"}}>
+              <div style={{aspectRatio:"1",background:T.s2,position:"relative",overflow:"hidden"}}>
+                {p.url
+                  ?<img src={p.url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt={p.concept}/>
+                  :<div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:"#FF4444",fontSize:13}}>❌ No generada</div>
+                }
+                {p.url&&(
+                  <div style={{position:"absolute",bottom:0,left:0,right:0,background:"linear-gradient(transparent,#00000099)",padding:"20px 12px 10px",display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
+                    <span style={{fontSize:11,color:"white",fontWeight:600}}>{labels[i]}</span>
+                    <button onClick={()=>dlImage(p.url,`avanti-${(form.producto||"img").replace(/\s+/g,"-")}-${i+1}`)} style={{padding:"5px 10px",background:"white",color:"#000",border:"none",borderRadius:6,fontSize:11,fontWeight:700,cursor:"pointer"}}>⬇</button>
+                  </div>
+                )}
+              </div>
+              <div style={{padding:12}}>
+                <div style={{fontSize:11,color:colors[i],fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>{p.concept}</div>
+                <div style={{fontSize:11,color:T.t2,lineHeight:1.5,fontFamily:"monospace",background:T.bg,padding:"6px 8px",borderRadius:6,maxHeight:56,overflow:"hidden"}}>{p.prompt?.slice(0,100)}…</div>
+                <div style={{display:"flex",gap:6,marginTop:8}}>
+                  {p.url&&<button onClick={()=>window.open(p.url,"_blank")} style={{flex:1,padding:"6px",background:T.s2,border:`1px solid ${T.border}`,borderRadius:6,color:T.t2,fontSize:11,cursor:"pointer",fontFamily:"Epilogue,sans-serif"}}>↗ Ver full</button>}
+                  <CopyBtn text={p.prompt} label="📋"/>
                 </div>
-                <div className="prompt-text">{p.prompt}</div>
               </div>
             </div>
           );
         })}
       </div>
-      <button className="new-btn" onClick={()=>setPhase("form")}>+ Nuevas variaciones</button>
+      <div style={{padding:14,background:T.grnD,border:`1px solid ${T.grn}33`,borderRadius:10,fontSize:13,color:T.t2,marginBottom:16}}>
+        <strong style={{color:T.grn}}>✓ Listas para usar.</strong> Descargalas y subillas directo a Meta Ads, TikTok o Canva.
+      </div>
+      <button className="new-btn" onClick={()=>{setPhase("form");setImages([]);setPrompts([]);}}>+ Generar nuevas imágenes</button>
     </div>
   );
 
   return(
     <div className="inner">
       <div style={{marginBottom:32}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><div className="pg-title">Generador de imágenes</div><span className="cost-tag">◆ {TOTAL} créditos (4 imgs)</span></div>
-        <div className="pg-sub">Prompts profesionales para Midjourney, DALL·E y Firefly. Optimizados para conversión.</div>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><div className="pg-title">Generador de imágenes</div><span className="cost-tag">◆ {TOTAL} créditos</span></div>
+        <div className="pg-sub">4 imágenes reales con DALL·E 3. Listas para descargar y usar en tus ads.</div>
       </div>
       <UpsellBanner credits={credits} onBuy={(c,p)=>createMPPayment({title:`AVANTI — ${c} créditos`,price:p,credits:c})}/>
       {err&&<div className="err-box">⚠ {err}</div>}
@@ -634,11 +706,11 @@ Cada prompt: composición, iluminación, colores, mood, estilo fotográfico. Sin
       <div className="field"><label className="lbl">Estilo visual</label><div className="chips">{STYLES.map(s=><button key={s} className={`chip${style===s?" on":""}`} onClick={()=>setStyle(s)}>{s}</button>)}</div></div>
       <div className="field"><label className="lbl">Formato</label><div className="chips">{FORMATS.map(f=><button key={f} className={`chip${format===f?" on":""}`} onClick={()=>setFormat(f)}>{f}</button>)}</div></div>
       <div style={{padding:14,background:T.s1,border:`1px solid ${T.border}`,borderRadius:10,marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div><div style={{fontSize:13,fontWeight:600,color:T.t1,marginBottom:2}}>Créditos disponibles</div><div style={{fontSize:12,color:T.t2}}>Costo: {TOTAL} créditos (4 imágenes × {COSTS.image})</div></div>
+        <div><div style={{fontSize:13,fontWeight:600,color:T.t1,marginBottom:2}}>Créditos disponibles</div><div style={{fontSize:12,color:T.t2}}>4 imágenes × {COSTS.image} crédito = {TOTAL} créditos</div></div>
         <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:28,fontWeight:700,color:credits>=TOTAL?T.grn:"#FF4444"}}>{credits}</div>
       </div>
       <button className="btn-run" onClick={run} disabled={!form.producto||credits<TOTAL}>
-        {credits<TOTAL?`Sin créditos (necesitás ${TOTAL})`:"🎨 Generar 4 prompts de imagen"}
+        {credits<TOTAL?`Sin créditos (necesitás ${TOTAL})`:"🎨 Generar 4 imágenes con DALL·E 3"}
       </button>
     </div>
   );
@@ -957,7 +1029,18 @@ export default function App(){
   const [screen,setScreen]=useState("home");
   const [mod,setMod]=useState("campaign");
   const [showPricing,setShowPricing]=useState(false);
-  const [form,setForm]=useState({producto:"",descripcion:"",objetivo:"",canal:"",tono:"",audiencia:"",diferenciador:""});
+  const DEMO_FORM={
+    producto:"Curso de Finanzas Personales",
+    descripcion:"Curso online de 4 semanas que enseña a ahorrar, invertir y salir de deudas. Resultados en 30 días.",
+    objetivo:"Ventas directas",
+    canal:"Meta Ads",
+    tono:"Urgente / FOMO",
+    audiencia:"25–34",
+    diferenciador:"resultados garantizados en 30 días"
+  };
+
+  const isDemo=typeof window!=="undefined"&&new URLSearchParams(window.location.search).get("demo")==="true";
+  const [form,setForm]=useState(isDemo?DEMO_FORM:{producto:"",descripcion:"",objetivo:"",canal:"",tono:"",audiencia:"",diferenciador:""});
 
   const [showTour,setShowTour]=useState(()=>{
     if(typeof window==="undefined")return false;
@@ -975,6 +1058,11 @@ export default function App(){
       localStorage.setItem("avanti_credits",String(total));
       window.history.replaceState({},"",window.location.pathname);
       return total;
+    }
+    // MODO DEMO: si viene con ?demo=true carga 50 créditos + form pre-llenado
+    if(p.get("demo")==="true"){
+      localStorage.setItem("avanti_credits","50");
+      return 50;
     }
     return parseInt(localStorage.getItem("avanti_credits")||"0");
   });
@@ -1029,6 +1117,15 @@ export default function App(){
                 <button className="btn-hero" onClick={()=>setShowPricing(true)}>Obtener AVANTI — $37 USD →</button>
                 <button className="btn-ghost" onClick={()=>setScreen("app")}>Probar gratis primero</button>
               </div>
+              {/* EJEMPLO BUTTON */}
+              <div style={{marginTop:16,animation:"fadeUp .5s .32s ease both"}}>
+                <button onClick={()=>{setForm(DEMO_FORM);setMod("campaign");setScreen("app");}} style={{background:"transparent",border:"none",color:T.t3,fontSize:13,cursor:"pointer",fontFamily:"Epilogue, sans-serif",display:"flex",alignItems:"center",gap:6,margin:"0 auto",transition:"color .2s",padding:"8px 16px",borderRadius:8,borderBottom:`1px dashed ${T.t3}`}}
+                  onMouseOver={e=>e.currentTarget.style.color=T.t2}
+                  onMouseOut={e=>e.currentTarget.style.color=T.t3}
+                >
+                  👀 Ver un ejemplo real primero
+                </button>
+              </div>
             </div>
             <div className="features">
               {[{icon:"⚡",name:"Campaña completa",desc:"Hooks, copies, CTAs y script. 2 créditos.",mod:"campaign"},{icon:"🎨",name:"Prompts de imágenes",desc:"4 prompts para Midjourney y DALL·E. 4 créditos.",mod:"images"},{icon:"🎬",name:"Storyboard de video",desc:"Escena por escena para Reels y Stories. 3 créditos.",mod:"video"},{icon:"🌐",name:"Landing persuasiva",desc:"HTML descargable con diseño completo. 2 créditos.",mod:"landing"}].map(f=>(
@@ -1081,6 +1178,17 @@ export default function App(){
 
         {screen==="app"&&(
           <div className="screen">
+            {isDemo&&(
+              <div style={{background:`linear-gradient(90deg,${T.accD},${T.yelD})`,borderBottom:`1px solid ${T.acc}33`,padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",position:"sticky",top:60,zIndex:160}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,fontSize:13,color:T.t1}}>
+                  <span style={{fontSize:18}}>🎬</span>
+                  <strong>Modo Demo</strong> — <span style={{color:T.t2}}>50 créditos cargados · Formulario pre-llenado · Todo listo para grabar</span>
+                </div>
+                <button onClick={()=>setShowPricing(true)} style={{padding:"6px 16px",background:T.acc,color:"white",border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"Epilogue, sans-serif",flexShrink:0}}>
+                  Obtener acceso real →
+                </button>
+              </div>
+            )}
             <div className="mod-nav">
               {MODULES.map(m=><button key={m.id} className={`mod-tab${mod===m.id?" active":""}`} onClick={()=>setMod(m.id)}><span>{m.icon}</span>{m.label}</button>)}
               <button className="mod-tab" style={{marginLeft:"auto",color:creditColor}} onClick={()=>setShowPricing(true)}>
