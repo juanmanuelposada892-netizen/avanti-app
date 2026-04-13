@@ -143,6 +143,34 @@ body{background:${T.bg};color:${T.t1};font-family:'Epilogue',sans-serif;min-heig
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
 .orb{position:fixed;width:700px;height:700px;background:radial-gradient(circle,${T.accG} 0%,transparent 70%);border-radius:50%;top:-300px;left:50%;transform:translateX(-50%);pointer-events:none;z-index:0}
 
+/* ── MOBILE ── */
+@media(max-width:600px){
+  .nav{padding:0 16px}
+  .nav-logo{font-size:18px}
+  .inner{padding:24px 16px 80px}
+  .pg-title{font-size:22px}
+  .hero{padding:60px 16px 40px}
+  .hero-btns{flex-direction:column;align-items:stretch}
+  .btn-hero,.btn-ghost{text-align:center;padding:16px 24px}
+  .features{grid-template-columns:1fr 1fr}
+  .proof-strip{gap:24px}
+  .proof-num{font-size:28px}
+  .score-row{grid-template-columns:1fr 1fr}
+  .mod-tab{padding:0 14px;font-size:12px}
+  .gen-wrap{padding:40px 16px}
+  .upsell-banner{flex-direction:column;gap:12px}
+  .how-steps{grid-template-columns:1fr}
+  .chips{gap:6px}
+  .chip{padding:6px 12px;font-size:12px}
+  .credit-bar{padding:14px}
+  .price-modal{border-radius:16px}
+  .tour-card{padding:24px}
+}
+@media(max-width:400px){
+  .features{grid-template-columns:1fr}
+  .score-row{grid-template-columns:1fr}
+}
+
 /* ── HOW IT WORKS ── */
 .how-section{padding:80px 24px;border-top:1px solid ${T.border};background:${T.s1}}
 .how-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:860px;margin:40px auto 0;position:relative}
@@ -743,6 +771,62 @@ SOLO JSON sin markdown:
   const dl=()=>{if(!landingData)return;const html=buildHTML(landingData);const blob=new Blob([html],{type:"text/html"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=`landing-${form.producto?.replace(/\s+/g,"-")||"producto"}.html`;a.click();URL.revokeObjectURL(u);};
   const preview=()=>{if(!landingData)return;const html=buildHTML(landingData);window.open(URL.createObjectURL(new Blob([html],{type:"text/html"})),"_blank");};
 
+  const [publishing,setPublishing]=useState(false);
+  const [publishedUrl,setPublishedUrl]=useState("");
+
+  const publishToNetlify=async()=>{
+    if(!landingData)return;
+    setPublishing(true);
+    setPublishedUrl("");
+    try{
+      const html=buildHTML(landingData);
+      const slug=(form.producto||"avanti").toLowerCase().replace(/[^a-z0-9]/g,"-").slice(0,30)+"-"+Date.now().toString(36);
+      // Netlify API - crear sitio y subir archivo en un solo paso
+      const res=await fetch("https://api.netlify.com/api/v1/sites",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({name:slug})
+      });
+      const site=await res.json();
+      if(!site.id){throw new Error("No se pudo crear el sitio");}
+      // Subir el HTML
+      const deploy=await fetch(`https://api.netlify.com/api/v1/sites/${site.id}/deploys`,{
+        method:"POST",
+        headers:{"Content-Type":"application/zip"},
+        body:await zipHTML(html,"index.html")
+      });
+      const deployData=await deploy.json();
+      const url=`https://${slug}.netlify.app`;
+      setPublishedUrl(url);
+    }catch(e){
+      // Fallback: abrir Netlify Drop con instrucción
+      setPublishedUrl("MANUAL");
+    }
+    setPublishing(false);
+  };
+
+  // Crear ZIP con el HTML para Netlify
+  const zipHTML=async(html,filename)=>{
+    // Usamos una técnica simple: blob con contenido del archivo
+    // Netlify acepta ZIP con un solo archivo index.html
+    const enc=new TextEncoder();
+    const data=enc.encode(html);
+    // Crear ZIP mínimo válido
+    const makeZip=(filename,content)=>{
+      const name=new TextEncoder().encode(filename);
+      const crc=crc32(content);
+      const local=new Uint8Array([0x50,0x4b,0x03,0x04,20,0,0,0,0,0,0,0,0,0,crc&0xff,(crc>>8)&0xff,(crc>>16)&0xff,(crc>>24)&0xff,content.length&0xff,(content.length>>8)&0xff,(content.length>>16)&0xff,(content.length>>24)&0xff,0,0,0,0,name.length,0,0,0,...name,...content]);
+      const central=new Uint8Array([0x50,0x4b,0x01,0x02,20,0,20,0,0,0,0,0,0,0,0,0,crc&0xff,(crc>>8)&0xff,(crc>>16)&0xff,(crc>>24)&0xff,content.length&0xff,(content.length>>8)&0xff,(content.length>>16)&0xff,(content.length>>24)&0xff,0,0,0,0,0,0,0,0,0,0,0,0,0,0,name.length,0,0,0,...name]);
+      const offset=local.length;
+      const eocd=new Uint8Array([0x50,0x4b,0x05,0x06,0,0,0,0,1,0,1,0,central.length&0xff,(central.length>>8)&0xff,0,0,offset&0xff,(offset>>8)&0xff,(offset>>16)&0xff,(offset>>24)&0xff,0,0]);
+      const zip=new Uint8Array(local.length+central.length+eocd.length);
+      zip.set(local,0);zip.set(central,local.length);zip.set(eocd,local.length+central.length);
+      return zip;
+    };
+    const crc32=(data)=>{let c=-1;for(let i=0;i<data.length;i++){c=((c>>8)^[0,1996959894,3993919788,2567524794,124634137,1886057615,3915621685,2657392035,249268274,2044508324,3772115230,2547177864,162941995,2125561021,3887607047,2428444049,498536548,1789927666,4089016648,2227061214,450548861,1843258603,4107580753,2211677639,325883990,1684777152,4251122042,2321926636,335633487,1661365465,4195302755,2366115317,997073096,1281953886,3579855332,2724688242,1006888145,1258607687,3524101629,2768942443,901097722,1119000684,3686517206,2898065728,853044451,1172266101,3705015759,2882616665,651767980,1373503546,3369554304,3218104598,565507253,1454621731,3485111705,3099436303,671266974,1594198024,3322730930,2970347812,795835527,1483230225,3244367275,3060149565,1994146192,31158534,2563907772,4023717930,1907459465,112637215,2680153253,3904427059,2013776290,251722036,2517215374,3775830040,2137656763,141376813,2439277719,3865271297,1802195444,476864866,2238001368,4066508878,1812370925,453092731,2181625025,4111451223,1706088902,314042704,2344532202,4240017532,1658658271,366619977,2362670323,4224994405,1303535960,984961486,2747007092,3569037538,1256170817,1037604311,2765210733,3554079995,1131014506,879679996,2909243462,3663771856,1141124467,855842277,2852801631,3708648649,1342533948,654459306,3188396048,3373015174,1466479909,544179635,3110523913,3462522015,1591671054,702138776,2966460450,3352799412,1504918807,783551873,3082640443,3233442989,3988292384,2596254646,62317068,1957810842,3939845945,2647816111,81470997,1943803523,3814918930,2489596804,225274430,2053790376,3826175755,2466906013,167816743,2097651377,4027552580,2265490386,503444072,1762050814,4150417245,2154129355,426522225,1852507879,4275313526,2312317920,282753626,1742555852,4189708143,2394877945,397917763,1622183637,3604390888,2714866558,953729732,1340076626,3518719985,2797360999,1068828381,1219638859,3624741850,2936675148,906185462,1090812512,3747672003,2825379669,829329135,1181335161,3412177804,3160834842,628085408,1382605366,3423369109,3138078467,570562233,1426400815,3317316542,2998733608,733239954,1555261956,3268935591,3050360625,752459403,1541320221,2607071920,3965973030,1969922972,40735498,2617837225,3943577151,1913087877,83908371,2512341634,3803740692,2075208622,213261112,2463272603,3855990285,2094854071,198958881,2262029012,4057260610,1759359992,534414190,2176718541,4139329115,1873836001,414664567,2282248934,4279200368,1711684554,285281116,2405801727,4167216745,1634467795,376229701,2685067896,3608007406,1308918612,956543938,2808555105,3495958263,1231636301,1047427035,2932959818,3654703836,1088359270,936918000,2847714899,3736837829,1202900863,817233897,3183342108,3401237130,1404277552,615818150,3134207493,3453421203,1423857449,601450431,3009837614,3294710456,1567103746,711928724,3020668471,3272380065,1510334235,755167117][(c^data[i])&0xff])>>>0;}return(c^-1)>>>0;};
+    return makeZip(filename,data).buffer;
+  };
+
   if(phase==="gen")return<div className="gen-wrap"><div className="spin"/><div className="gen-title">Construyendo landing…</div><div className="gen-step">Copy + diseño visual en proceso…</div><div className="stream-box">{stream||"Iniciando…"}<span className="cursor"/></div></div>;
 
   if(phase==="result"&&landingData){
@@ -751,28 +835,66 @@ SOLO JSON sin markdown:
       <div className="inner" style={{maxWidth:860}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,marginBottom:24}}>
           <div><div className="pg-title">Landing HTML lista ✓</div><div className="pg-sub">{form.producto} · {colorScheme}</div></div>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button className="btn-sm" onClick={preview}>👁 Vista previa</button><button className="btn-prime" onClick={dl}>⬇ Descargar .html</button><button className="btn-sm" onClick={()=>setPhase("form")}>← Nueva</button></div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <button className="btn-sm" onClick={preview}>👁 Preview</button>
+            <button className="btn-sm" onClick={dl}>⬇ Descargar</button>
+            <button className="btn-sm" onClick={()=>setPhase("form")}>← Nueva</button>
+          </div>
         </div>
-        <div style={{background:sc.bg,border:`2px solid ${sc.acc}44`,borderRadius:14,overflow:"hidden",marginBottom:20}}>
+
+        {/* PUBLISH BOX */}
+        {!publishedUrl?(
+          <div style={{background:`linear-gradient(135deg,${T.s2},${T.bg})`,border:`1px solid ${T.grn}44`,borderRadius:16,padding:24,marginBottom:20}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12,flexWrap:"wrap"}}>
+              <div style={{width:44,height:44,background:T.grnD,border:`1px solid ${T.grn}44`,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>🚀</div>
+              <div style={{flex:1}}>
+                <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:17,fontWeight:700,marginBottom:4}}>Publicar online — gratis</div>
+                <div style={{fontSize:12,color:T.t2}}>Tu landing queda online en segundos con una URL pública lista para compartir.</div>
+              </div>
+            </div>
+            <button onClick={publishToNetlify} disabled={publishing} style={{width:"100%",padding:14,background:publishing?"#1A3A1A":T.grn,color:publishing?T.t2:"#000",border:"none",borderRadius:10,fontFamily:"'Clash Display',sans-serif",fontSize:15,fontWeight:700,cursor:publishing?"not-allowed":"pointer",transition:"all .2s",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+              {publishing?<><div style={{width:16,height:16,border:"2px solid #333",borderTopColor:T.grn,borderRadius:"50%",animation:"spin .8s linear infinite"}}/> Publicando…</>:"🌐 Publicar ahora — gratis"}
+            </button>
+          </div>
+        ):(
+          publishedUrl==="MANUAL"?(
+            <div style={{background:T.yelD,border:`1px solid ${T.yel}44`,borderRadius:12,padding:20,marginBottom:20}}>
+              <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:15,fontWeight:700,marginBottom:8,color:T.yel}}>⚡ Publicá en 30 segundos</div>
+              <div style={{fontSize:13,color:T.t2,marginBottom:12,lineHeight:1.7}}>1. Descargá el archivo .html<br/>2. Andá a <strong style={{color:T.t1}}>netlify.com/drop</strong><br/>3. Arrastrá el archivo → URL lista</div>
+              <button onClick={dl} style={{padding:"10px 20px",background:T.yel,color:"#000",border:"none",borderRadius:8,fontFamily:"'Clash Display',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer"}}>⬇ Descargar .html</button>
+            </div>
+          ):(
+            <div style={{background:T.grnD,border:`1px solid ${T.grn}44`,borderRadius:12,padding:20,marginBottom:20}}>
+              <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:15,fontWeight:700,marginBottom:8,color:T.grn}}>🎉 ¡Tu landing está online!</div>
+              <div style={{display:"flex",alignItems:"center",gap:8,background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 14px",marginBottom:12}}>
+                <span style={{fontSize:12,color:T.t1,flex:1,fontFamily:"monospace",wordBreak:"break-all"}}>{publishedUrl}</span>
+                <CopyBtn text={publishedUrl} label="Copiar"/>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>window.open(publishedUrl,"_blank")} style={{flex:1,padding:"10px",background:T.grn,color:"#000",border:"none",borderRadius:8,fontFamily:"'Clash Display',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer"}}>↗ Abrir sitio</button>
+                <button onClick={()=>setPublishedUrl("")} style={{padding:"10px 14px",background:T.s1,border:`1px solid ${T.border}`,borderRadius:8,color:T.t2,fontSize:12,cursor:"pointer",fontFamily:"Epilogue, sans-serif"}}>Republicar</button>
+              </div>
+            </div>
+          )
+        )}
+
+        <div style={{background:sc.bg,border:`2px solid ${sc.acc}44`,borderRadius:14,overflow:"hidden",marginBottom:16}}>
           <div style={{background:sc.s1,padding:"10px 16px",borderBottom:`1px solid ${sc.bd}`,display:"flex",alignItems:"center",gap:8}}>
             <div style={{width:10,height:10,borderRadius:"50%",background:"#FF5F57"}}/><div style={{width:10,height:10,borderRadius:"50%",background:"#FEBC2E"}}/><div style={{width:10,height:10,borderRadius:"50%",background:"#28C840"}}/>
             <span style={{fontSize:11,color:T.t2,marginLeft:8,fontFamily:"monospace"}}>{form.producto?.toLowerCase().replace(/\s+/g,"-")||"producto"}.html</span>
             <button onClick={preview} style={{marginLeft:"auto",fontSize:11,padding:"3px 10px",background:sc.acc,color:"white",border:"none",borderRadius:6,cursor:"pointer"}}>Abrir →</button>
           </div>
-          <div style={{padding:20,maxHeight:360,overflowY:"auto"}}>
-            {[{l:"🚀 HERO",v:`"${landingData.hero_titulo}"`},{l:"❗ PROBLEMA",v:landingData.problema_titulo},{l:"✅ SOLUCIÓN",v:landingData.solucion_titulo},{l:"⚡ BENEFICIOS",v:landingData.beneficios.map(b=>`${b.icono} ${b.titulo}`).join(" · ")},{l:"💬 TESTIMONIO",v:`"${landingData.testimonios[0]?.texto}"`},{l:"💰 PRECIO",v:`$${landingData.precio_valor} ${landingData.precio_moneda}`},{l:"🔥 CIERRE",v:landingData.cierre_titulo}].map((s,i)=>(
-              <div key={i} style={{padding:"10px 0",borderBottom:`1px solid ${sc.bd}`}}>
+          <div style={{padding:20,maxHeight:300,overflowY:"auto"}}>
+            {[{l:"🚀 HERO",v:`"${landingData.hero_titulo}"`},{l:"❗ PROBLEMA",v:landingData.problema_titulo},{l:"✅ SOLUCIÓN",v:landingData.solucion_titulo},{l:"⚡ BENEFICIOS",v:landingData.beneficios.map(b=>`${b.icono} ${b.titulo}`).join(" · ")},{l:"💰 PRECIO",v:`$${landingData.precio_valor} ${landingData.precio_moneda}`}].map((s,i)=>(
+              <div key={i} style={{padding:"8px 0",borderBottom:`1px solid ${sc.bd}`}}>
                 <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:".08em",color:sc.acc,fontWeight:700,marginBottom:3}}>{s.l}</div>
-                <div style={{fontSize:13,color:sc.t1,lineHeight:1.5,marginBottom:4}}>{s.v}</div>
+                <div style={{fontSize:12,color:sc.t1,lineHeight:1.5,marginBottom:4}}>{s.v}</div>
                 <CopyBtn text={s.v}/>
               </div>
             ))}
           </div>
         </div>
-        <div style={{padding:14,background:T.grnD,border:`1px solid ${T.grn}33`,borderRadius:10,fontSize:13,color:T.t2,lineHeight:1.8,marginBottom:16}}>
-          <strong style={{color:T.grn}}>✓ Publicar en 5 min:</strong> 1. Descargar .html · 2. netlify.com → drag & drop · 3. Reemplazá <code style={{color:T.acc}}>alert('...')</code> con tu link de MercadoPago
-        </div>
-        <button className="new-btn" onClick={()=>setPhase("form")}>+ Nueva landing</button>
+        <button className="new-btn" onClick={()=>{setPhase("form");setPublishedUrl("");}}>+ Nueva landing</button>
       </div>
     );
   }
