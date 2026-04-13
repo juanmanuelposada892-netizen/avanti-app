@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from "react";
 const T = {
   bg: "#080810",
   s1: "#0E0E1A",
