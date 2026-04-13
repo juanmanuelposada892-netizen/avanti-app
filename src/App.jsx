@@ -142,6 +142,32 @@ body{background:${T.bg};color:${T.t1};font-family:'Epilogue',sans-serif;min-heig
 @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
 .orb{position:fixed;width:700px;height:700px;background:radial-gradient(circle,${T.accG} 0%,transparent 70%);border-radius:50%;top:-300px;left:50%;transform:translateX(-50%);pointer-events:none;z-index:0}
+
+/* ── HOW IT WORKS ── */
+.how-section{padding:80px 24px;border-top:1px solid ${T.border};background:${T.s1}}
+.how-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:860px;margin:40px auto 0;position:relative}
+@media(max-width:640px){.how-steps{grid-template-columns:1fr}}
+.how-step{padding:28px;background:${T.bg};border:1px solid ${T.border};border-radius:14px;position:relative;transition:border-color .2s}
+.how-step:hover{border-color:${T.acc}44}
+.how-num{width:36px;height:36px;border-radius:10px;background:${T.accD};border:1px solid ${T.acc}44;color:${T.acc};font-family:'Clash Display',sans-serif;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+.how-icon{font-size:28px;margin-bottom:12px}
+.how-title{font-family:'Clash Display',sans-serif;font-size:16px;font-weight:700;margin-bottom:8px;letter-spacing:-.02em}
+.how-desc{font-size:13px;color:${T.t2};line-height:1.65}
+.how-arrow{position:absolute;top:50%;right:-20px;transform:translateY(-50%);color:${T.t3};font-size:18px;z-index:1}
+@media(max-width:640px){.how-arrow{display:none}}
+
+/* ── TOUR OVERLAY ── */
+.tour-overlay{position:fixed;inset:0;background:#000000AA;z-index:900;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .3s ease}
+.tour-card{background:${T.s1};border:1px solid ${T.borderB};border-radius:20px;max-width:480px;width:100%;padding:32px;animation:slideUp .3s ease;position:relative}
+.tour-step-indicator{display:flex;gap:6px;margin-bottom:24px}
+.tour-dot{width:8px;height:8px;border-radius:50%;background:${T.border};transition:background .2s}
+.tour-dot.active{background:${T.acc};width:24px;border-radius:100px}
+.tour-icon-big{font-size:48px;margin-bottom:16px}
+.tour-title{font-family:'Clash Display',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.03em;margin-bottom:10px}
+.tour-desc{font-size:14px;color:${T.t2};line-height:1.7;margin-bottom:24px}
+.tour-btns{display:flex;gap:10px;justify-content:space-between;align-items:center}
+.tour-next{padding:"12px 24px";background:${T.acc};color:white;border:none;border-radius:9px;font-family:'Clash Display',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s}
+.tour-skip{font-size:12px;color:${T.t3};cursor:pointer;background:none;border:none;font-family:'Epilogue',sans-serif}
 `;
 
 const OBJ=["Ventas directas","Leads / Registros","Awareness","Tráfico web","App installs"];
@@ -768,12 +794,54 @@ SOLO JSON sin markdown:
   );
 }
 
+/* ═══ TOUR COMPONENT ════════════════════════════════════ */
+const TOUR_STEPS = [
+  {icon:"🐿️", title:"Bienvenido a AVANTI", desc:"La herramienta de IA para crear campañas de marketing completas en segundos. Te vamos a guiar en 3 pasos rápidos."},
+  {icon:"📝", title:"Paso 1 — Describí tu producto", desc:"Entrás al módulo Campaña, completás el nombre, descripción, objetivo y canal. Cuanto más detalle, mejor resultado."},
+  {icon:"⚡", title:"Paso 2 — Elegí el módulo", desc:"Campaña genera hooks y copies. Imágenes crea prompts para Midjourney. Video arma el storyboard. Landing genera el HTML completo."},
+  {icon:"🚀", title:"Paso 3 — Copiá y publicá", desc:"Cada resultado tiene un botón para copiar al portapapeles o descargar. Pegalo directamente en Meta Ads, TikTok o donde necesites."},
+  {icon:"💳", title:"Sistema de créditos", desc:"Cada generación consume créditos. Empezás con 0 — comprás 100 créditos por $37 USD. Recargás cuando querés, sin vencimiento."},
+];
+
+function TourModal({onClose}){
+  const [step,setStep]=useState(0);
+  const current=TOUR_STEPS[step];
+  const isLast=step===TOUR_STEPS.length-1;
+  return(
+    <div className="tour-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
+      <div className="tour-card">
+        <div className="tour-step-indicator">
+          {TOUR_STEPS.map((_,i)=><div key={i} className={`tour-dot${i===step?" active":""}`}/>)}
+        </div>
+        <div className="tour-icon-big">{current.icon}</div>
+        <div className="tour-title">{current.title}</div>
+        <div className="tour-desc">{current.desc}</div>
+        <div className="tour-btns">
+          <button className="tour-skip" onClick={onClose}>Saltar tutorial</button>
+          <div style={{display:"flex",gap:8}}>
+            {step>0&&<button onClick={()=>setStep(s=>s-1)} style={{padding:"10px 18px",background:T.s2,border:`1px solid ${T.border}`,borderRadius:9,color:T.t2,fontSize:13,cursor:"pointer",fontFamily:"Epilogue, sans-serif"}}>← Atrás</button>}
+            <button onClick={()=>isLast?onClose():setStep(s=>s+1)} style={{padding:"10px 22px",background:T.acc,color:"white",border:"none",borderRadius:9,fontFamily:"'Clash Display',sans-serif",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+              {isLast?"¡Empezar! →":"Siguiente →"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══ MAIN APP ═══════════════════════════════════════════ */
 export default function App(){
   const [screen,setScreen]=useState("home");
   const [mod,setMod]=useState("campaign");
   const [showPricing,setShowPricing]=useState(false);
   const [form,setForm]=useState({producto:"",descripcion:"",objetivo:"",canal:"",tono:"",audiencia:"",diferenciador:""});
+
+  const [showTour,setShowTour]=useState(()=>{
+    if(typeof window==="undefined")return false;
+    return !localStorage.getItem("avanti_tour_done");
+  });
+  const closeTour=()=>{localStorage.setItem("avanti_tour_done","1");setShowTour(false);};
 
   const [credits,setCredits]=useState(()=>{
     if(typeof window==="undefined")return 0;
@@ -818,6 +886,7 @@ export default function App(){
                 <span style={{color:T.t2,fontSize:11}}>créditos</span>
               </div>
             )}
+            <button onClick={()=>setShowTour(true)} style={{width:32,height:32,borderRadius:"50%",background:T.s1,border:`1px solid ${T.border}`,color:T.t2,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Epilogue, sans-serif",fontWeight:700,flexShrink:0}} title="Ver tutorial">?</button>
             {screen==="home"
               ?<button className="nav-cta" onClick={()=>setScreen("app")}>Empezar →</button>
               :<button className="nav-cta" onClick={()=>setShowPricing(true)}>💳 Recargar</button>
@@ -826,6 +895,7 @@ export default function App(){
         </nav>
 
         {showPricing&&<PricingModal onClose={()=>setShowPricing(false)} onPurchase={addCredits}/>}
+        {showTour&&<TourModal onClose={closeTour}/>}
 
         {screen==="home"&&(
           <div className="screen">
@@ -843,6 +913,34 @@ export default function App(){
                 <div className="feat-card" key={f.mod} onClick={()=>{setMod(f.mod);setScreen("app");}}><div className="feat-icon">{f.icon}</div><div className="feat-name">{f.name}</div><div className="feat-desc">{f.desc}</div></div>
               ))}
             </div>
+            {/* ── CÓMO FUNCIONA ── */}
+            <div className="how-section">
+              <div style={{textAlign:"center",maxWidth:600,margin:"0 auto"}}>
+                <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:".1em",color:T.acc,fontWeight:700,marginBottom:12}}>Cómo funciona</div>
+                <div style={{fontFamily:"'Clash Display',sans-serif",fontSize:"clamp(24px,4vw,42px)",fontWeight:700,letterSpacing:"-.03em",lineHeight:1.05}}>De cero a campaña lista<br/><span style={{color:T.acc}}>en 3 pasos.</span></div>
+              </div>
+              <div className="how-steps">
+                {[
+                  {num:"01",icon:"📝",title:"Describí tu producto",desc:"Ingresá el nombre, descripción, objetivo de campaña y canal. Cuanto más detalle, mejor resultado genera la IA.",color:T.acc},
+                  {num:"02",icon:"⚡",title:"Elegí el módulo",desc:"Seleccioná Campaña, Imágenes, Video o Landing según lo que necesites. Cada módulo genera contenido específico.",color:T.blu},
+                  {num:"03",icon:"🚀",title:"Copiá y publicá",desc:"Copiás el resultado al portapapeles o lo descargás. Pegalo en Meta Ads, TikTok, Canva o donde lo necesites.",color:T.grn},
+                ].map((s,i)=>(
+                  <div className="how-step" key={i} style={{borderColor:`${s.color}22`}}>
+                    {i<2&&<div className="how-arrow">→</div>}
+                    <div className="how-num" style={{background:`${s.color}18`,borderColor:`${s.color}44`,color:s.color}}>{s.num}</div>
+                    <div className="how-icon">{s.icon}</div>
+                    <div className="how-title">{s.title}</div>
+                    <div className="how-desc">{s.desc}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{textAlign:"center",marginTop:40}}>
+                <button onClick={()=>setShowTour(true)} style={{padding:"10px 24px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:100,color:T.t2,fontSize:13,cursor:"pointer",fontFamily:"Epilogue, sans-serif",display:"inline-flex",alignItems:"center",gap:8}}>
+                  <span>?</span> Ver tutorial interactivo
+                </button>
+              </div>
+            </div>
+
             <div className="proof-strip">
               {[{num:"100",label:"Créditos incluidos"},{num:"60s",label:"Por generación"},{num:"4",label:"Módulos IA"},{num:"$37",label:"Pago único"}].map(p=>(
                 <div className="proof-item" key={p.label}><div className="proof-num">{p.num}</div><div className="proof-label">{p.label}</div></div>
