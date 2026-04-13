@@ -1539,7 +1539,7 @@ export default function App() {
                 Pagás una vez. Usás para siempre. Sin suscripciones.
               </div>
               <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
-                <button className="btn-hero" onClick={()=>setShowPricing(true)}>Obtener AVANTI — $37 USD →</button>
+                <button className="btn-hero" onClick={()=>setShowPricing(true)}>Obtener AVANTI — $27 USD →</button>
                 <button className="btn-ghost" onClick={()=>setScreen("app")}>Probar gratis primero</button>
               </div>
             </div>
