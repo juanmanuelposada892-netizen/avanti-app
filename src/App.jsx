@@ -274,7 +274,7 @@ function ResSection({icon,ic,name,tag,tc,items}){
 }
 
 async function callAI(prompt,onChunk){
-  const res=await fetch("https://api.anthropic.com/v1/messages",{
+  const res=await fetch("/api/claude",{
     method:"POST",
     headers:{
       "Content-Type":"application/json",
