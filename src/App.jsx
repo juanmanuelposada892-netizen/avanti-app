@@ -255,7 +255,17 @@ function ResSection({icon,ic,name,tag,tc,items}){
 }
 
 async function callAI(prompt,onChunk){
-  const res=await fetch("/api/anthropic",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,stream:true,messages:[{role:"user",content:prompt}]})});
+  const key=import.meta.env.VITE_ANTHROPIC_KEY||"";
+  const res=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "x-api-key":key,
+      "anthropic-version":"2023-06-01",
+      "anthropic-dangerous-direct-browser-access":"true"
+    },
+    body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,stream:true,messages:[{role:"user",content:prompt}]})
+  });
   if(!res.ok)throw new Error(`API ${res.status}`);
   const reader=res.body.getReader();const dec=new TextDecoder();let full="";
   while(true){const{done,value}=await reader.read();if(done)break;const lines=dec.decode(value).split("\n");for(const ln of lines){if(!ln.startsWith("data: "))continue;const d=ln.slice(6).trim();if(d==="[DONE]")continue;try{const p=JSON.parse(d);const t=p?.delta?.text||"";if(t){full+=t;onChunk(full);}}catch{}}}
