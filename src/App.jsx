@@ -18,7 +18,7 @@ const COSTS = { campaign:2, image:1, video:3, landing:2 };
 const PLAN_CREDITS = 100;
 const MP_ACCESS_TOKEN = "TU_ACCESS_TOKEN_AQUI";
 const MP_LINK_PAGO = "https://mpago.la/2k82Fb7";
-const DALLE_API_KEY = import.meta.env.VITE_DALLE_KEY||"";
+const DALLE_API_KEY = import.meta.env.VITE_DALLE_KEY||"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";
 
 const G = `
 @import url('https://fonts.googleapis.com/css2?family=Clash+Display:wght@500;600;700&family=Epilogue:ital,wght@0,300;0,400;0,500;1,300&display=swap');
@@ -255,8 +255,7 @@ function ResSection({icon,ic,name,tag,tc,items}){
 }
 
 async function callAI(prompt,onChunk){
-  const apiKey=import.meta.env.VITE_ANTHROPIC_KEY||"";
-  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,stream:true,messages:[{role:"user",content:prompt}]})});
+  const res=await fetch("/api/anthropic",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,stream:true,messages:[{role:"user",content:prompt}]})});
   if(!res.ok)throw new Error(`API ${res.status}`);
   const reader=res.body.getReader();const dec=new TextDecoder();let full="";
   while(true){const{done,value}=await reader.read();if(done)break;const lines=dec.decode(value).split("\n");for(const ln of lines){if(!ln.startsWith("data: "))continue;const d=ln.slice(6).trim();if(d==="[DONE]")continue;try{const p=JSON.parse(d);const t=p?.delta?.text||"";if(t){full+=t;onChunk(full);}}catch{}}}
