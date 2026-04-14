@@ -255,7 +255,7 @@ function ResSection({icon,ic,name,tag,tc,items}){
 }
 
 async function callAI(prompt,onChunk){
-  const res=await fetch("/API/claude",{
+  const res=await fetch("/api/claude",{
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,messages:[{role:"user",content:prompt}]})
