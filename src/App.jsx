@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 
 /* ═══════════════════════════════════════════════════════════
-   AVANTI v3 — Credits + DALL·E + MercadoPago API
+   AVANTI MKT v4 — La plataforma de marketing más completa de LATAM
 ═══════════════════════════════════════════════════════════ */
 
 const T = {
@@ -17,11 +17,63 @@ const T = {
   t1:"#F0F0FF",t2:"#7777BB",t3:"#3A3A60",
 };
 
-const COSTS = { campaign:2, image:1, video:3, landing:2 };
+const COSTS = { campaign:2, image:1, video:3, landing:2, email:2, funnel:3, calendar:2, audit:1, abtest:1, brand:3, hashtags:1, bio:1 };
+
+// PLANES DE SUSCRIPCIÓN
+const PLANS = {
+  starter: {
+    name:"Starter",
+    price:12,
+    priceYear:97,
+    color:"#4F8EF7",
+    emoji:"🚀",
+    desc:"Para emprendedores que arrancan",
+    modules:["campaign","image","video","landing","hashtags","bio"],
+    limits:{campaigns:10,images:20,landings:3},
+    badge:null
+  },
+  plus: {
+    name:"Plus",
+    price:19,
+    priceYear:154,
+    color:"#9B5CF6",
+    emoji:"⚡",
+    desc:"Para negocios en crecimiento",
+    modules:["campaign","image","video","landing","email","funnel","calendar","hashtags","bio","audit"],
+    limits:{campaigns:30,images:60,landings:10},
+    badge:"MÁS POPULAR"
+  },
+  pro: {
+    name:"Pro",
+    price:37,
+    priceYear:297,
+    color:"#FF4D00",
+    emoji:"🔥",
+    desc:"Para agencias y marketers pro",
+    modules:["campaign","image","video","landing","email","funnel","calendar","hashtags","bio","audit","abtest","brand"],
+    limits:{campaigns:999,images:999,landings:999},
+    badge:"TODO INCLUIDO"
+  }
+};
 const PLAN_CREDITS = 100;
 const MP_ACCESS_TOKEN = "TU_ACCESS_TOKEN_AQUI";
 const MP_LINK_PAGO = "https://mpago.la/2k82Fb7";
 const DALLE_API_KEY = import.meta.env.VITE_DALLE_KEY||"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";
+const GPT_API_KEY = import.meta.env.VITE_DALLE_KEY||"";
+
+const MARKETING_EXPERT_PROMPT = `Sos un experto en marketing digital con 15 años de experiencia en:
+- Performance marketing (Meta Ads, TikTok Ads, Google Ads)
+- Copywriting persuasivo y psicología de ventas
+- Email marketing y funnels de conversión
+- Estrategia de contenidos y SEO
+- Branding y posicionamiento de marca
+- E-commerce y ventas online en LATAM
+
+Tu especialidad es crear campañas que VENDEN, no solo que se ven bien.
+Usás frameworks como AIDA, PAS, Before-After-Bridge y StoryBrand.
+Conocés el mercado latinoamericano y sus particularidades culturales.
+Siempre generás contenido específico, nunca genérico.
+Respondés siempre en español rioplatense.`;
 
 const G = `
 @import url('https://fonts.googleapis.com/css2?family=Clash+Display:wght@500;600;700&family=Epilogue:ital,wght@0,300;0,400;0,500;1,300&display=swap');
@@ -282,7 +334,7 @@ async function callAI(prompt,onChunk){
       "anthropic-version":"2023-06-01",
       "anthropic-dangerous-direct-browser-access":"true"
     },
-    body:JSON.stringify({model:"claude-3-5-sonnet-20241022",max_tokens:1500,messages:[{role:"user",content:prompt}]})
+    body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,stream:true,messages:[{role:"user",content:prompt}]})
   });
   if(!res.ok)throw new Error(`API ${res.status}`);
   const reader=res.body.getReader();const dec=new TextDecoder();let full="";
@@ -884,7 +936,7 @@ SOLO JSON sin markdown:
       // Netlify API - crear sitio y subir archivo en un solo paso
       const res=await fetch("https://api.netlify.com/api/v1/sites",{
         method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{"Content-Type":"application/json"},
         body:JSON.stringify({name:slug})
       });
       const site=await res.json();
@@ -1016,6 +1068,359 @@ SOLO JSON sin markdown:
   );
 }
 
+/* ═══ EMAIL MARKETING MODULE ════════════════════════════ */
+function EmailModule({form,credits,useCredits,onBuy}){
+  const [phase,setPhase]=useState("form");
+  const [stream,setStream]=useState("");
+  const [result,setResult]=useState("");
+  const [err,setErr]=useState("");
+  const [tipo,setTipo]=useState("Bienvenida");
+  const TIPOS=["Bienvenida","Nurturing","Cierre/Venta","Reactivación","Lanzamiento"];
+
+  const run=async()=>{
+    if(!form.producto){setErr("Completá primero los datos en Campaña.");return;}
+    if(credits<COSTS.email){setErr(`Necesitás ${COSTS.email} créditos.`);return;}
+    setErr("");setStream("");setPhase("gen");useCredits(COSTS.email);
+    const prompt=`Escribí una secuencia de 3 emails de tipo "${tipo}" para:
+Producto: "${form.producto}". ${form.descripcion||""}
+Objetivo: ${form.objetivo||"ventas"}. Audiencia: ${form.audiencia||"general"}.
+
+Formato para cada email:
+ASUNTO: [asunto irresistible, máx 50 caracteres]
+PREVIEW: [texto preview, máx 90 caracteres]
+CUERPO:
+[email completo con saludo, desarrollo, CTA y firma]
+---`;
+    try{let full="";await callAI(prompt,t=>{full=t;setStream(t);});setResult(full);setPhase("result");}
+    catch{setErr("Error al generar.");setPhase("form");}
+  };
+
+  if(phase==="gen")return<div className="gen-wrap"><div className="spin"/><div className="gen-title">Creando emails…</div><div className="gen-step">Escribiendo secuencia de {tipo}…</div><div className="stream-box">{stream||"Iniciando…"}<span className="cursor"/></div></div>;
+
+  if(phase==="result")return(
+    <div className="inner">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,marginBottom:24}}>
+        <div><div className="pg-title">Emails listos ✓</div><div className="pg-sub">Secuencia de {tipo} · {form.producto}</div></div>
+        <div style={{display:"flex",gap:8}}><button className="btn-sm" onClick={()=>navigator.clipboard.writeText(result)}>📋 Copiar todo</button><button className="btn-sm" onClick={()=>setPhase("form")}>← Nueva</button></div>
+      </div>
+      <div style={{background:T.s1,border:`1px solid ${T.border}`,borderRadius:12,padding:20,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.8,color:T.t2,maxHeight:600,overflowY:"auto"}}>{result}</div>
+      <button className="new-btn" onClick={()=>setPhase("form")}>+ Nueva secuencia</button>
+    </div>
+  );
+
+  return(
+    <div className="inner">
+      <div style={{marginBottom:32}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><div className="pg-title">Email Marketing</div><span className="cost-tag">◆ {COSTS.email} créditos</span></div>
+        <div className="pg-sub">Secuencias de emails que venden. Asunto, preview y cuerpo completo.</div>
+      </div>
+      {err&&<div className="err-box">⚠ {err}</div>}
+      {!form.producto&&<div className="err-box">💡 Completá primero los datos en Campaña.</div>}
+      <div className="field"><label className="lbl">Tipo de secuencia</label><div className="chips">{TIPOS.map(t=><button key={t} className={`chip${tipo===t?" on":""}`} onClick={()=>setTipo(t)}>{t}</button>)}</div></div>
+      <button className="btn-run" onClick={run} disabled={!form.producto||credits<COSTS.email}>
+        {credits<COSTS.email?`Sin créditos`:"✉️ Generar secuencia de emails"}
+      </button>
+    </div>
+  );
+}
+
+/* ═══ FUNNEL MODULE ══════════════════════════════════════ */
+function FunnelModule({form,credits,useCredits,onBuy}){
+  const [phase,setPhase]=useState("form");
+  const [stream,setStream]=useState("");
+  const [result,setResult]=useState("");
+  const [err,setErr]=useState("");
+  const [tipo,setTipo]=useState("Webinar gratuito");
+  const TIPOS=["Webinar gratuito","Lead magnet","Prueba gratis","Descuento urgente","Consulta gratuita"];
+
+  const run=async()=>{
+    if(!form.producto){setErr("Completá primero los datos en Campaña.");return;}
+    if(credits<COSTS.funnel){setErr(`Necesitás ${COSTS.funnel} créditos.`);return;}
+    setErr("");setStream("");setPhase("gen");useCredits(COSTS.funnel);
+    const prompt=`Diseñá un funnel de ventas completo tipo "${tipo}" para:
+Producto: "${form.producto}". ${form.descripcion||""}
+Objetivo: ${form.objetivo||"ventas"}. Precio: a definir.
+
+Incluí:
+1. TOPE DE FUNNEL (Atracción): copy del anuncio + hook
+2. MEDIO DE FUNNEL (Consideración): página de captura + lead magnet
+3. SECUENCIA DE NURTURING: 3 emails de seguimiento
+4. FONDO DE FUNNEL (Conversión): oferta + urgencia + garantía
+5. UPSELL: qué ofrecer después de la compra
+6. MÉTRICAS ESPERADAS: conversiones estimadas por etapa`;
+    try{let full="";await callAI(prompt,t=>{full=t;setStream(t);});setResult(full);setPhase("result");}
+    catch{setErr("Error al generar.");setPhase("form");}
+  };
+
+  if(phase==="gen")return<div className="gen-wrap"><div className="spin"/><div className="gen-title">Diseñando funnel…</div><div className="gen-step">Construyendo embudo de conversión…</div><div className="stream-box">{stream||"Iniciando…"}<span className="cursor"/></div></div>;
+
+  if(phase==="result")return(
+    <div className="inner">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,marginBottom:24}}>
+        <div><div className="pg-title">Funnel listo ✓</div><div className="pg-sub">{tipo} · {form.producto}</div></div>
+        <div style={{display:"flex",gap:8}}><button className="btn-sm" onClick={()=>navigator.clipboard.writeText(result)}>📋 Copiar</button><button className="btn-sm" onClick={()=>setPhase("form")}>← Nuevo</button></div>
+      </div>
+      <div style={{background:T.s1,border:`1px solid ${T.border}`,borderRadius:12,padding:20,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.8,color:T.t2,maxHeight:600,overflowY:"auto"}}>{result}</div>
+      <button className="new-btn" onClick={()=>setPhase("form")}>+ Nuevo funnel</button>
+    </div>
+  );
+
+  return(
+    <div className="inner">
+      <div style={{marginBottom:32}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><div className="pg-title">Funnel de Ventas</div><span className="cost-tag">◆ {COSTS.funnel} créditos</span></div>
+        <div className="pg-sub">Embudo completo desde el anuncio hasta la venta. Cada etapa con su copy.</div>
+      </div>
+      {err&&<div className="err-box">⚠ {err}</div>}
+      {!form.producto&&<div className="err-box">💡 Completá primero los datos en Campaña.</div>}
+      <div className="field"><label className="lbl">Tipo de funnel</label><div className="chips">{TIPOS.map(t=><button key={t} className={`chip${tipo===t?" on":""}`} onClick={()=>setTipo(t)}>{t}</button>)}</div></div>
+      <button className="btn-run" onClick={run} disabled={!form.producto||credits<COSTS.funnel}>
+        {credits<COSTS.funnel?`Sin créditos`:"🎯 Generar funnel completo"}
+      </button>
+    </div>
+  );
+}
+
+/* ═══ CALENDAR MODULE ════════════════════════════════════ */
+function CalendarModule({form,credits,useCredits,onBuy}){
+  const [phase,setPhase]=useState("form");
+  const [stream,setStream]=useState("");
+  const [result,setResult]=useState("");
+  const [err,setErr]=useState("");
+  const [red,setRed]=useState("Instagram");
+  const [dias,setDias]=useState("30 días");
+  const REDES=["Instagram","TikTok","LinkedIn","Facebook","Twitter/X","YouTube"];
+  const DIAS=["7 días","15 días","30 días"];
+
+  const run=async()=>{
+    if(!form.producto){setErr("Completá primero los datos en Campaña.");return;}
+    if(credits<COSTS.calendar){setErr(`Necesitás ${COSTS.calendar} créditos.`);return;}
+    setErr("");setStream("");setPhase("gen");useCredits(COSTS.calendar);
+    const prompt=`Creá un calendario editorial de ${dias} para ${red} para:
+Producto/Marca: "${form.producto}". ${form.descripcion||""}
+Objetivo: ${form.objetivo||"ventas y awareness"}.
+
+Para cada día incluí:
+- Tipo de contenido (educativo/entretenimiento/venta/inspiración)
+- Tema específico
+- Hook de apertura
+- Hashtags sugeridos (5-8)
+- Mejor horario de publicación
+
+Variá los formatos: carrusel, reel, story, post estático.
+Seguí la regla 80/20: 80% valor, 20% venta.`;
+    try{let full="";await callAI(prompt,t=>{full=t;setStream(t);});setResult(full);setPhase("result");}
+    catch{setErr("Error al generar.");setPhase("form");}
+  };
+
+  if(phase==="gen")return<div className="gen-wrap"><div className="spin"/><div className="gen-title">Creando calendario…</div><div className="gen-step">{dias} de contenido para {red}…</div><div className="stream-box">{stream||"Iniciando…"}<span className="cursor"/></div></div>;
+
+  if(phase==="result")return(
+    <div className="inner" style={{maxWidth:900}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,marginBottom:24}}>
+        <div><div className="pg-title">Calendario listo ✓</div><div className="pg-sub">{dias} · {red} · {form.producto}</div></div>
+        <div style={{display:"flex",gap:8}}>
+          <button className="btn-sm" onClick={()=>navigator.clipboard.writeText(result)}>📋 Copiar</button>
+          <button className="btn-sm" onClick={()=>{const b=new Blob([result],{type:"text/plain"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=`calendario-${form.producto?.replace(/\s+/g,"-")}.txt`;a.click();}}>⬇ Descargar</button>
+          <button className="btn-sm" onClick={()=>setPhase("form")}>← Nuevo</button>
+        </div>
+      </div>
+      <div style={{background:T.s1,border:`1px solid ${T.border}`,borderRadius:12,padding:20,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.8,color:T.t2,maxHeight:600,overflowY:"auto"}}>{result}</div>
+      <button className="new-btn" onClick={()=>setPhase("form")}>+ Nuevo calendario</button>
+    </div>
+  );
+
+  return(
+    <div className="inner">
+      <div style={{marginBottom:32}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><div className="pg-title">Calendario Editorial</div><span className="cost-tag">◆ {COSTS.calendar} créditos</span></div>
+        <div className="pg-sub">30 días de contenido planificado. Nunca más quedarte sin ideas.</div>
+      </div>
+      {err&&<div className="err-box">⚠ {err}</div>}
+      {!form.producto&&<div className="err-box">💡 Completá primero los datos en Campaña.</div>}
+      <div className="field"><label className="lbl">Red social</label><div className="chips">{REDES.map(r=><button key={r} className={`chip${red===r?" on":""}`} onClick={()=>setRed(r)}>{r}</button>)}</div></div>
+      <div className="field"><label className="lbl">Duración</label><div className="chips">{DIAS.map(d=><button key={d} className={`chip${dias===d?" on":""}`} onClick={()=>setDias(d)}>{d}</button>)}</div></div>
+      <button className="btn-run" onClick={run} disabled={!form.producto||credits<COSTS.calendar}>
+        {credits<COSTS.calendar?`Sin créditos`:"📅 Generar calendario editorial"}
+      </button>
+    </div>
+  );
+}
+
+/* ═══ AUDIT MODULE ═══════════════════════════════════════ */
+function AuditModule({credits,useCredits}){
+  const [phase,setPhase]=useState("form");
+  const [copy,setCopy]=useState("");
+  const [stream,setStream]=useState("");
+  const [result,setResult]=useState("");
+  const [err,setErr]=useState("");
+
+  const run=async()=>{
+    if(!copy.trim()){setErr("Pegá el copy que querés auditar.");return;}
+    if(credits<COSTS.audit){setErr(`Necesitás ${COSTS.audit} crédito.`);return;}
+    setErr("");setStream("");setPhase("gen");useCredits(COSTS.audit);
+    const prompt=`Sos un experto en copywriting y conversión. Auditá este copy publicitario:
+
+"${copy}"
+
+Analizá:
+1. PUNTUACIÓN GENERAL: [0-100] con justificación
+2. HOOK: ¿Los primeros 3 segundos enganchan? ¿Por qué sí/no?
+3. PROPUESTA DE VALOR: ¿Está clara? ¿Es diferenciadora?
+4. OBJECIONES: ¿Qué objeciones no resuelve?
+5. CTA: ¿Es claro y urgente?
+6. EMOCIONES: ¿Qué emociones activa? ¿Son las correctas?
+7. VERSIÓN MEJORADA: Reescribí el copy con todas las mejoras aplicadas
+
+Sé específico y directo.`;
+    try{let full="";await callAI(prompt,t=>{full=t;setStream(t);});setResult(full);setPhase("result");}
+    catch{setErr("Error al generar.");setPhase("form");}
+  };
+
+  if(phase==="gen")return<div className="gen-wrap"><div className="spin"/><div className="gen-title">Auditando copy…</div><div className="gen-step">Analizando con criterios de conversión…</div><div className="stream-box">{stream||"Iniciando…"}<span className="cursor"/></div></div>;
+
+  if(phase==="result")return(
+    <div className="inner">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,marginBottom:24}}>
+        <div><div className="pg-title">Auditoría lista ✓</div></div>
+        <div style={{display:"flex",gap:8}}><button className="btn-sm" onClick={()=>navigator.clipboard.writeText(result)}>📋 Copiar</button><button className="btn-sm" onClick={()=>setPhase("form")}>← Nueva</button></div>
+      </div>
+      <div style={{background:T.s1,border:`1px solid ${T.border}`,borderRadius:12,padding:20,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.8,color:T.t2,maxHeight:600,overflowY:"auto"}}>{result}</div>
+      <button className="new-btn" onClick={()=>setPhase("form")}>+ Auditar otro copy</button>
+    </div>
+  );
+
+  return(
+    <div className="inner">
+      <div style={{marginBottom:32}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><div className="pg-title">Auditoría de Copy</div><span className="cost-tag">◆ {COSTS.audit} crédito</span></div>
+        <div className="pg-sub">Pegá cualquier copy y la IA lo analiza y lo mejora con criterios de conversión.</div>
+      </div>
+      {err&&<div className="err-box">⚠ {err}</div>}
+      <div className="field">
+        <label className="lbl">Pegá tu copy aquí</label>
+        <textarea className="txta" style={{minHeight:160}} placeholder="Pegá el texto de tu anuncio, email, landing o post..." value={copy} onChange={e=>setCopy(e.target.value)}/>
+      </div>
+      <button className="btn-run" onClick={run} disabled={!copy.trim()||credits<COSTS.audit}>
+        {credits<COSTS.audit?`Sin créditos`:"🔍 Auditar copy"}
+      </button>
+    </div>
+  );
+}
+
+/* ═══ HASHTAGS MODULE ════════════════════════════════════ */
+function HashtagsModule({form,credits,useCredits}){
+  const [phase,setPhase]=useState("form");
+  const [result,setResult]=useState("");
+  const [err,setErr]=useState("");
+  const [red,setRed]=useState("Instagram");
+  const REDES=["Instagram","TikTok","LinkedIn","Twitter/X"];
+
+  const run=async()=>{
+    if(!form.producto){setErr("Completá primero los datos en Campaña.");return;}
+    if(credits<COSTS.hashtags){setErr(`Necesitás ${COSTS.hashtags} crédito.`);return;}
+    setErr("");setPhase("gen");useCredits(COSTS.hashtags);
+    const prompt=`Generá hashtags optimizados para ${red} para:
+Producto/Negocio: "${form.producto}". ${form.descripcion||""}
+
+Creá 3 grupos:
+🔥 TRENDING (alta competencia, máximo alcance): 10 hashtags
+🎯 NICHO (media competencia, audiencia específica): 15 hashtags  
+💎 MICRO (baja competencia, alta conversión): 10 hashtags
+
+Para cada grupo explicá la estrategia de uso.
+Incluí también: mejor momento para publicar en ${red} y tips de uso.`;
+    try{let full="";await callAI(prompt,t=>{full=t;setResult(t);});setPhase("result");}
+    catch{setErr("Error al generar.");setPhase("form");}
+  };
+
+  if(phase==="gen")return<div className="gen-wrap"><div className="spin"/><div className="gen-title">Generando hashtags…</div><div className="gen-step">Buscando los mejores para tu nicho…</div></div>;
+
+  if(phase==="result")return(
+    <div className="inner">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,marginBottom:24}}>
+        <div><div className="pg-title">Hashtags listos ✓</div><div className="pg-sub">{red} · {form.producto}</div></div>
+        <div style={{display:"flex",gap:8}}><button className="btn-sm" onClick={()=>navigator.clipboard.writeText(result)}>📋 Copiar</button><button className="btn-sm" onClick={()=>setPhase("form")}>← Nuevos</button></div>
+      </div>
+      <div style={{background:T.s1,border:`1px solid ${T.border}`,borderRadius:12,padding:20,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.8,color:T.t2}}>{result}</div>
+      <button className="new-btn" onClick={()=>setPhase("form")}>+ Nuevos hashtags</button>
+    </div>
+  );
+
+  return(
+    <div className="inner">
+      <div style={{marginBottom:32}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><div className="pg-title">Banco de Hashtags</div><span className="cost-tag">◆ {COSTS.hashtags} crédito</span></div>
+        <div className="pg-sub">35 hashtags optimizados en 3 grupos estratégicos para maximizar alcance.</div>
+      </div>
+      {err&&<div className="err-box">⚠ {err}</div>}
+      {!form.producto&&<div className="err-box">💡 Completá primero los datos en Campaña.</div>}
+      <div className="field"><label className="lbl">Red social</label><div className="chips">{REDES.map(r=><button key={r} className={`chip${red===r?" on":""}`} onClick={()=>setRed(r)}>{r}</button>)}</div></div>
+      <button className="btn-run" onClick={run} disabled={!form.producto||credits<COSTS.hashtags}>
+        {credits<COSTS.hashtags?`Sin créditos`:"#️⃣ Generar hashtags"}
+      </button>
+    </div>
+  );
+}
+
+/* ═══ BIO MODULE ══════════════════════════════════════════ */
+function BioModule({form,credits,useCredits}){
+  const [phase,setPhase]=useState("form");
+  const [result,setResult]=useState("");
+  const [err,setErr]=useState("");
+  const [red,setRed]=useState("Instagram");
+  const REDES=["Instagram","TikTok","LinkedIn","Twitter/X"];
+
+  const run=async()=>{
+    if(!form.producto){setErr("Completá primero los datos en Campaña.");return;}
+    if(credits<COSTS.bio){setErr(`Necesitás ${COSTS.bio} crédito.`);return;}
+    setErr("");setPhase("gen");useCredits(COSTS.bio);
+    const prompt=`Creá 3 versiones de bio optimizada para ${red} para:
+Negocio/Marca: "${form.producto}". ${form.descripcion||""}
+Objetivo: ${form.objetivo||"ventas y seguidores"}.
+
+Para cada versión:
+- BIO COMPLETA (respetando límite de caracteres de ${red})
+- EMOJI STRATEGY: qué emojis usar y dónde
+- CTA: llamada a acción para el link en bio
+- PALABRAS CLAVE: las más importantes incluidas
+
+Versión 1: Profesional/Corporativa
+Versión 2: Cercana/Personal  
+Versión 3: Urgente/Conversión`;
+    try{let full="";await callAI(prompt,t=>{full=t;setResult(t);});setPhase("result");}
+    catch{setErr("Error al generar.");setPhase("form");}
+  };
+
+  if(phase==="gen")return<div className="gen-wrap"><div className="spin"/><div className="gen-title">Creando bios…</div><div className="gen-step">Optimizando para {red}…</div></div>;
+
+  if(phase==="result")return(
+    <div className="inner">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,marginBottom:24}}>
+        <div><div className="pg-title">Bios listas ✓</div><div className="pg-sub">{red} · {form.producto}</div></div>
+        <div style={{display:"flex",gap:8}}><button className="btn-sm" onClick={()=>navigator.clipboard.writeText(result)}>📋 Copiar</button><button className="btn-sm" onClick={()=>setPhase("form")}>← Nuevas</button></div>
+      </div>
+      <div style={{background:T.s1,border:`1px solid ${T.border}`,borderRadius:12,padding:20,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.8,color:T.t2}}>{result}</div>
+      <button className="new-btn" onClick={()=>setPhase("form")}>+ Nuevas bios</button>
+    </div>
+  );
+
+  return(
+    <div className="inner">
+      <div style={{marginBottom:32}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><div className="pg-title">Bio para Redes</div><span className="cost-tag">◆ {COSTS.bio} crédito</span></div>
+        <div className="pg-sub">3 versiones de bio optimizada para conversión. Lista para copiar y pegar.</div>
+      </div>
+      {err&&<div className="err-box">⚠ {err}</div>}
+      {!form.producto&&<div className="err-box">💡 Completá primero los datos en Campaña.</div>}
+      <div className="field"><label className="lbl">Red social</label><div className="chips">{REDES.map(r=><button key={r} className={`chip${red===r?" on":""}`} onClick={()=>setRed(r)}>{r}</button>)}</div></div>
+      <button className="btn-run" onClick={run} disabled={!form.producto||credits<COSTS.bio}>
+        {credits<COSTS.bio?`Sin créditos`:"✍️ Generar bios"}
+      </button>
+    </div>
+  );
+}
+
 /* ═══ TOUR COMPONENT ════════════════════════════════════ */
 const TOUR_STEPS = [
   {icon:"🐿️", title:"Bienvenido a AVANTI", desc:"La herramienta de IA para crear campañas de marketing completas en segundos. Te vamos a guiar en 3 pasos rápidos."},
@@ -1101,7 +1506,18 @@ export default function App(){
   const creditColor=credits>50?T.grn:credits>20?T.yel:"#FF4444";
   const creditStatus=credits>50?"high":credits>20?"low":"empty";
 
-  const MODULES=[{id:"campaign",icon:"⚡",label:"Campaña"},{id:"images",icon:"🎨",label:"Imágenes"},{id:"video",icon:"🎬",label:"Videos"},{id:"landing",icon:"🌐",label:"Landing"}];
+  const MODULES=[
+    {id:"campaign",icon:"⚡",label:"Campaña"},
+    {id:"images",icon:"🎨",label:"Imágenes"},
+    {id:"video",icon:"🎬",label:"Video"},
+    {id:"landing",icon:"🌐",label:"Landing"},
+    {id:"email",icon:"✉️",label:"Emails"},
+    {id:"funnel",icon:"🎯",label:"Funnel"},
+    {id:"calendar",icon:"📅",label:"Calendario"},
+    {id:"audit",icon:"🔍",label:"Auditoría"},
+    {id:"hashtags",icon:"#️⃣",label:"Hashtags"},
+    {id:"bio",icon:"✍️",label:"Bio"},
+  ];
 
   return(
     <>
@@ -1114,7 +1530,7 @@ export default function App(){
         <nav className="nav">
           <div className="nav-logo" onClick={()=>setScreen("home")}>
             <div className="logo-mark">A</div>
-            AVANTI
+            AVANTI MKT
             <SquirrelLogo size={40}/>
           </div>
           <div className="nav-right">
@@ -1140,8 +1556,8 @@ export default function App(){
           <div className="screen">
             <div className="hero">
               <div className="hero-badge"><div className="dot-live"/>IA para Performance Marketing</div>
-              <h1 className="hero-h">Creá anuncios<br/><span className="acc">que venden.</span><br/><span className="dim">En 60 segundos.</span></h1>
-              <p className="hero-p">Hooks, copies, imágenes, video y landing. Todo con IA. 100 créditos incluidos.</p>
+              <h1 className="hero-h">Marketing que<br/><span className="acc">vende solo.</span><br/><span className="dim">Con IA experta.</span></h1>
+              <p className="hero-p">La plataforma de marketing más completa de LATAM. Campañas, emails, funnels, imágenes, videos y más. Todo con IA experta en ventas.</p>
               <div className="hero-btns">
                 <button className="btn-hero" onClick={()=>setShowPricing(true)}>Obtener AVANTI — $37 USD →</button>
                 <button className="btn-ghost" onClick={()=>setScreen("app")}>Probar gratis primero</button>
@@ -1157,7 +1573,18 @@ export default function App(){
               </div>
             </div>
             <div className="features">
-              {[{icon:"⚡",name:"Campaña completa",desc:"Hooks, copies, CTAs y script. 2 créditos.",mod:"campaign"},{icon:"🎨",name:"Prompts de imágenes",desc:"4 prompts para Midjourney y DALL·E. 4 créditos.",mod:"images"},{icon:"🎬",name:"Storyboard de video",desc:"Escena por escena para Reels y Stories. 3 créditos.",mod:"video"},{icon:"🌐",name:"Landing persuasiva",desc:"HTML descargable con diseño completo. 2 créditos.",mod:"landing"}].map(f=>(
+              {[
+                {icon:"⚡",name:"Campaña completa",desc:"Hooks, copies, CTAs y script de video.",mod:"campaign"},
+                {icon:"🎨",name:"Imágenes con IA",desc:"4 imágenes reales con DALL·E 3.",mod:"images"},
+                {icon:"✉️",name:"Email Marketing",desc:"Secuencias de emails que venden.",mod:"email"},
+                {icon:"🎯",name:"Funnel de Ventas",desc:"Embudo completo desde el anuncio hasta el cierre.",mod:"funnel"},
+                {icon:"📅",name:"Calendario Editorial",desc:"30 días de contenido planificado.",mod:"calendar"},
+                {icon:"🔍",name:"Auditoría de Copy",desc:"Mejorá cualquier copy con IA experta.",mod:"audit"},
+                {icon:"🎬",name:"Storyboard de Video",desc:"Escena por escena para Reels y Stories.",mod:"video"},
+                {icon:"🌐",name:"Landing Page HTML",desc:"Diseño completo descargable en minutos.",mod:"landing"},
+                {icon:"#️⃣",name:"Banco de Hashtags",desc:"35 hashtags optimizados por nicho.",mod:"hashtags"},
+                {icon:"✍️",name:"Bio para Redes",desc:"3 versiones de bio optimizada para conversión.",mod:"bio"},
+              ].map(f=>(
                 <div className="feat-card" key={f.mod} onClick={()=>{setMod(f.mod);setScreen("app");}}><div className="feat-icon">{f.icon}</div><div className="feat-name">{f.name}</div><div className="feat-desc">{f.desc}</div></div>
               ))}
             </div>
@@ -1230,6 +1657,12 @@ export default function App(){
             {mod==="images"&&<ImageModule form={form} credits={credits} useCredits={useCredits} onBuy={()=>setShowPricing(true)}/>}
             {mod==="video"&&<VideoModule form={form} credits={credits} useCredits={useCredits} onBuy={()=>setShowPricing(true)}/>}
             {mod==="landing"&&<LandingModule form={form} credits={credits} useCredits={useCredits} onBuy={()=>setShowPricing(true)}/>}
+            {mod==="email"&&<EmailModule form={form} credits={credits} useCredits={useCredits} onBuy={()=>setShowPricing(true)}/>}
+            {mod==="funnel"&&<FunnelModule form={form} credits={credits} useCredits={useCredits} onBuy={()=>setShowPricing(true)}/>}
+            {mod==="calendar"&&<CalendarModule form={form} credits={credits} useCredits={useCredits} onBuy={()=>setShowPricing(true)}/>}
+            {mod==="audit"&&<AuditModule credits={credits} useCredits={useCredits} onBuy={()=>setShowPricing(true)}/>}
+            {mod==="hashtags"&&<HashtagsModule form={form} credits={credits} useCredits={useCredits} onBuy={()=>setShowPricing(true)}/>}
+            {mod==="bio"&&<BioModule form={form} credits={credits} useCredits={useCredits} onBuy={()=>setShowPricing(true)}/>}
           </div>
         )}
       </div>
