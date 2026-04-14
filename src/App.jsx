@@ -18,7 +18,7 @@ const COSTS = { campaign:2, image:1, video:3, landing:2 };
 const PLAN_CREDITS = 100;
 const MP_ACCESS_TOKEN = "TU_ACCESS_TOKEN_AQUI";
 const MP_LINK_PAGO = "https://mpago.la/2k82Fb7";
-const DALLE_API_KEY = import.meta.env.VITE_DALLE_KEY||"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";
+const DALLE_API_KEY = import.meta.env.VITE_DALLE_KEY||"";
 
 const G = `
 @import url('https://fonts.googleapis.com/css2?family=Clash+Display:wght@500;600;700&family=Epilogue:ital,wght@0,300;0,400;0,500;1,300&display=swap');
